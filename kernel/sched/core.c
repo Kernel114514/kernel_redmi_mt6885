@@ -7512,7 +7512,9 @@ void __init sched_init_smp(void)
 
 	init_hmp_domains();
 #ifdef CONFIG_MACH_MT6873
-	init_efuse_info();
+	static int efuse_aware_big_thermal;
+	extern u32 get_devinfo_with_index(u32 index);	
+	efuse_aware_big_thermal = (get_devinfo_with_index(7) & 0xFF) == 0x30;
 #endif
 	alloc_cpumask_var(&non_isolated_cpus, GFP_KERNEL);
 
