@@ -34,6 +34,20 @@ atomic_t vol_down_long_press_flag = ATOMIC_INIT(0);
 
 int kpd_klog_en;
 void __iomem *kp_base;
+
+#define VOLUME_UP_LONG_PRESS_SECONDS	10
+static struct timer_list vol_up_long_press_timer;
+static void volup_long_press_panic(struct timer_list *t)
+{
+	pr_emerg("Volume Up long press %d seconds: triggering kernel panic\n",
+		 VOLUME_UP_LONG_PRESS_SECONDS);
+	panic("Volume up long press panic triggered");
+}
+
+int mtk_debug_volup_panic_enabled = 1;
+module_param(mtk_debug_volup_panic_enabled, int, 0644);
+MODULE_PARM_DESC(mtk_debug_volup_panic_enabled, "Enable volume up long press panic debug feature");
+
 static unsigned int kp_irqnr;
 struct input_dev *kpd_input_dev;
 static struct dentry *kpd_droot;
@@ -231,6 +245,18 @@ static void kpd_keymap_handler(unsigned long data)
 				atomic_set(&vol_down_long_press_flag, 0);
 			}
 #endif
+			/* Volume Up long press panic handling */
+			if (linux_keycode == KEY_VOLUMEUP && mtk_debug_volup_panic_enabled) {
+				if (pressed) {
+					mod_timer(&vol_up_long_press_timer,
+						  jiffies + VOLUME_UP_LONG_PRESS_SECONDS * HZ);
+					kpd_print("Volume Up pressed, start %ds panic timer\n",
+						  VOLUME_UP_LONG_PRESS_SECONDS);
+				} else {
+					del_timer(&vol_up_long_press_timer);
+					kpd_print("Volume Up released, cancel panic timer\n");
+				}
+			}
 		}
 	}
 
@@ -380,6 +406,9 @@ static int kpd_pdrv_probe(struct platform_device *pdev)
 	kpd_get_dts_info(pdev->dev.of_node);
 
 	kpd_memory_setting();
+
+	/* Initialize volume up long press panic timer */
+	timer_setup(&vol_up_long_press_timer, volup_long_press_panic, 0);
 
 	kpd_input_dev = devm_input_allocate_device(&pdev->dev);
 	if (!kpd_input_dev) {
