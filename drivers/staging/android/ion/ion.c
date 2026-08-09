@@ -25,6 +25,7 @@
 #include <linux/kthread.h>
 #include <linux/list.h>
 #include <linux/memblock.h>
+#include <linux/mi_memory.h>
 #include <linux/miscdevice.h>
 #include <linux/export.h>
 #include <linux/mm.h>
@@ -2428,6 +2429,18 @@ total_pools_kb_show(struct kobject *kobj, struct kobj_attribute *attr,
 
 	return sprintf(buf, "%llu\n", div_u64(size_in_bytes, 1024));
 }
+
+u64 ion_total_heaps_kb(void)
+{
+	return div_u64(atomic_long_read(&total_heap_bytes), 1024);
+}
+EXPORT_SYMBOL_GPL(ion_total_heaps_kb);
+
+u64 ion_total_pools_kb(void)
+{
+	return div_u64((u64)ion_page_pool_nr_pages() * PAGE_SIZE, 1024);
+}
+EXPORT_SYMBOL_GPL(ion_total_pools_kb);
 
 static struct kobj_attribute total_heaps_kb_attr =
 	__ATTR_RO(total_heaps_kb);

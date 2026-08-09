@@ -59,6 +59,7 @@
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/miscdevice.h>
+#include <linux/mi_memory.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/nsproxy.h>
@@ -6755,6 +6756,24 @@ int binder_transactions_show(struct seq_file *m, void *unused)
 
 	return 0;
 }
+
+int binder_proc_transaction_show(struct seq_file *m, pid_t pid)
+{
+	struct binder_proc *proc;
+
+	seq_printf(m, "proc %d\n", pid);
+	seq_puts(m, "binder transaction info:\n");
+	mutex_lock(&binder_procs_lock);
+	hlist_for_each_entry(proc, &binder_procs, proc_node) {
+		if (proc->pid == pid) {
+			print_binder_proc(m, proc, 1);
+			break;
+		}
+	}
+	mutex_unlock(&binder_procs_lock);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(binder_proc_transaction_show);
 
 static int proc_show(struct seq_file *m, void *unused)
 {

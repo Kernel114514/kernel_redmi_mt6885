@@ -13,6 +13,13 @@ config MTK_PLATFORM
 config ARCH_MTK_PROJECT
 	string "MTK project name"
 
+config MI_MEMORY_SYSFS
+	bool "Xiaomi memory statistics interface"
+	depends on ION && ANDROID_BINDER_IPC && PROC_FS
+	help
+	  Expose ION allocation totals and per-process Binder state through
+	  Xiaomi's memory statistics device and proc interface.
+
 config FPGA_EARLY_PORTING
 	bool "MTK FPGA EARLY PORTING"
 	help
@@ -458,4 +465,3 @@ source "drivers/misc/mediatek/hdmi/Kconfig"
 source "drivers/misc/mediatek/otp/Kconfig"
 
 endmenu    # Misc
-
