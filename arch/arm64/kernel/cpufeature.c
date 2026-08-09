@@ -34,6 +34,7 @@
 #include <asm/sysreg.h>
 #include <asm/traps.h>
 #include <asm/virt.h>
+#include <asm/vectors.h>
 
 unsigned long elf_hwcap __read_mostly;
 EXPORT_SYMBOL_GPL(elf_hwcap);
@@ -50,6 +51,8 @@ unsigned int compat_elf_hwcap2 __read_mostly;
 
 DECLARE_BITMAP(cpu_hwcaps, ARM64_NCAPS);
 EXPORT_SYMBOL(cpu_hwcaps);
+
+DEFINE_PER_CPU_READ_MOSTLY(const char *, this_cpu_vector) = vectors;
 
 static int dump_cpu_hwcaps(struct notifier_block *self, unsigned long v, void *p)
 {
