@@ -20,6 +20,13 @@ config MI_MEMORY_SYSFS
 	  Expose ION allocation totals and per-process Binder state through
 	  Xiaomi's memory statistics device and proc interface.
 
+config DEBUG_KINFO
+	bool "Persistent kernel debug information"
+	depends on OF && OF_RESERVED_MEM
+	help
+	  Publish kernel section offsets and build information in a reserved
+	  memory descriptor for external crash-analysis tools.
+
 config FPGA_EARLY_PORTING
 	bool "MTK FPGA EARLY PORTING"
 	help

@@ -98,6 +98,7 @@ obj-$(CONFIG_MTK_NET_CCMNI) +=  ccmni/
 obj-$(CONFIG_MTK_ECCCI_DRIVER) +=  eccci/
 obj-$(CONFIG_MTK_SSMR) += memory-ssmr/
 obj-$(CONFIG_MI_MEMORY_SYSFS) += mi_memory_sysfs.o
+obj-$(CONFIG_DEBUG_KINFO) += debug_kinfo.o
 obj-y += cache-auditor/
 obj-$(CONFIG_MTK_AMMS) += memory-amms/
 obj-$(CONFIG_ZONE_MOVABLE_CMA) += zone_movable_cma/
