@@ -23,6 +23,7 @@
 #include <asm/cpu.h>
 #include <asm/cputype.h>
 #include <asm/cpufeature.h>
+#include <asm/insn.h>
 #include <asm/vectors.h>
 
 static bool __maybe_unused
@@ -472,6 +473,13 @@ static const struct midr_range arm64_ssb_cpus[] = {
 	MIDR_ALL_VERSIONS(MIDR_CORTEX_A55),
 	{},
 };
+
+/*
+ * Forward declarations for the Spectre-v2 state tracked below. They are
+ * defined (with initializers) in the Spectre-v2 section further down.
+ */
+static bool __hardenbp_enab;
+static bool __spectrev2_safe;
 
 /*
  * We try to ensure that the mitigation state can never change as the result of
