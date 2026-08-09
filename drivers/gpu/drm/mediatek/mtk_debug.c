@@ -2306,7 +2306,8 @@ static void process_dbg_opt(const char *opt)
 		if (len <= 2)
 			mtk_drm_set_cwb_user_buf((void *)NULL, IMAGE_ONLY);
 		else
-			mtk_drm_set_cwb_user_buf((void *)user_buffer,
+			mtk_drm_set_cwb_user_buf((void *)(unsigned long)
+						  user_buffer,
 						  IMAGE_ONLY);
 	}
 
