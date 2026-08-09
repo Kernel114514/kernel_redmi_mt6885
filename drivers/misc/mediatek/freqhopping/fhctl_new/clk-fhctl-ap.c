@@ -667,6 +667,11 @@ static struct match mt6853_match = {
 	.hdlr = &ap_hdlr_v1,
 	.init = &ap_init_v1,
 };
+static struct match mt6885_match = {
+	.name = "mediatek,mt6885-fhctl",
+	.hdlr = &ap_hdlr_v1,
+	.init = &ap_init_v1,
+};
 static struct fh_operation ap_ops_6739 = {
 	.hopping = ap_hopping_6739,
 	.ssc_enable = ap_ssc_enable_6739,
@@ -681,6 +686,7 @@ static struct match mt6739_match = {
 	.init = &ap_init_6739,
 };
 static struct match *matches[] = {
+	&mt6885_match,
 	&mt6853_match,
 	&mt6739_match,
 	NULL,

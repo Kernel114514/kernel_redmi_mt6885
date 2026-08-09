@@ -130,7 +130,7 @@ static struct pll_dts *parse_dt(struct platform_device *pdev)
 {
 	struct device_node *child;
 	struct device_node *root;
-	unsigned int num_pll;
+	unsigned int num_pll = 0;
 	int iomap_idx = 0;
 	struct pll_dts *array;
 	int pll_idx = 0;
@@ -139,10 +139,20 @@ static struct pll_dts *parse_dt(struct platform_device *pdev)
 
 	root = pdev->dev.of_node;
 	match = of_match_node(pdev->dev.driver->of_match_table, root);
-	of_property_read_u32(root, "num-pll", &num_pll);
+	for_each_child_of_node(root, child) {
+		struct device_node *pll;
+
+		for_each_child_of_node(child, pll)
+			num_pll++;
+	}
+
+	if (!num_pll || !match)
+		return NULL;
 
 	size = sizeof(*array)*num_pll;
 	array = kzalloc(size, GFP_KERNEL);
+	if (!array)
+		return NULL;
 	FHDBG("array<%x>, num_pll<%d>, comp<%s>\n",
 			array, num_pll,
 			match->compatible);
@@ -193,7 +203,7 @@ static struct pll_dts *parse_dt(struct platform_device *pdev)
 			num++;
 			pll_idx++;
 		}
-		iomap_idx++;
+		iomap_idx += 2;
 
 		FHDBG("domain<%s>, method<%s>\n", domain, method);
 		FHDBG("base<%x,%x>\n", fhctl_base, apmixed_base);
@@ -216,6 +226,8 @@ static int fh_plt_drv_probe(struct platform_device *pdev)
 
 	/* convert dt to data */
 	array = parse_dt(pdev);
+	if (!array)
+		return -EINVAL;
 	dev_set_drvdata(&pdev->dev, (void *)array);
 
 	/* init every subsys */
@@ -262,6 +274,7 @@ static void fh_plt_drv_shutdown(struct platform_device *pdev)
 }
 
 static const struct of_device_id fh_of_match[] = {
+	{ .compatible = "mediatek,mt6885-fhctl"},
 	{ .compatible = "mediatek,mt6853-fhctl"},
 	{ .compatible = "mediatek,mt6739-fhctl"},
 	{}

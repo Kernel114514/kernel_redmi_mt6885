@@ -338,7 +338,18 @@ static struct match mt6853_match = {
 	.hdlr = &mcupm_hdlr_6853,
 	.init = &mcupm_init_v1,
 };
+static struct hdlr_data_v1 hdlr_data_6885;
+static struct fh_hdlr mcupm_hdlr_6885 = {
+	.ops = &mcupm_ops_v1,
+	.data = &hdlr_data_6885,
+};
+static struct match mt6885_match = {
+	.name = "mediatek,mt6885-fhctl",
+	.hdlr = &mcupm_hdlr_6885,
+	.init = &mcupm_init_v1,
+};
 static struct match *matches[] = {
+	&mt6885_match,
 	&mt6853_match,
 	NULL,
 };
