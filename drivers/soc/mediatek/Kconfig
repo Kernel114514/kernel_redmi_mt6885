@@ -69,3 +69,8 @@ config MTK_LPM
 	  platform could enter deeper sleep mode when cpu preparing to
 	  power down if it have sufficient time between warmboot.
 
+config MTK_SOCINFO
+	bool "MediaTek SoC information"
+	select SOC_BUS
+	help
+	  Register the MediaTek platform model through the generic SoC bus.
