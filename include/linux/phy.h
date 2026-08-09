@@ -941,7 +941,7 @@ int phy_ethtool_set_link_ksettings(struct net_device *ndev,
 int phy_ethtool_nway_reset(struct net_device *ndev);
 
 #if IS_ENABLED(CONFIG_PHYLIB)
-int __init mdio_bus_init(void);
+int mdio_bus_init(void);
 void mdio_bus_exit(void);
 #endif
 
