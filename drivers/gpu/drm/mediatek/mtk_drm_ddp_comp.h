@@ -252,6 +252,8 @@ enum mtk_ddp_io_cmd {
 	DSI_LFR_UPDATE = 57,
 	DSI_LFR_STATUS_CHECK = 58,
 	DSI_HBM_SOLUTION = 59,
+	WDMA_WRITE_DST_ADDR0,
+	WDMA_READ_DST_SIZE,
 };
 
 static inline const char *get_cmd_name(enum mtk_ddp_io_cmd cmd)
@@ -377,6 +379,10 @@ static inline const char *get_cmd_name(enum mtk_ddp_io_cmd cmd)
 		return "DSI_LFR_STATUS_CHECK";
 	case DSI_HBM_SOLUTION:
 		return "DSI_HBM_SOLUTION";
+	case WDMA_WRITE_DST_ADDR0:
+		return "WDMA_WRITE_DST_ADDR0";
+	case WDMA_READ_DST_SIZE:
+		return "WDMA_READ_DST_SIZE";
 	}
 }
 

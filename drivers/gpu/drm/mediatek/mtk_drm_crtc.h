@@ -627,7 +627,7 @@ struct mtk_cwb_info {
 	unsigned int copy_w;
 	unsigned int copy_h;
 
-	enum addon_scenario scn;
+	unsigned int scn;
 	struct mtk_ddp_comp *comp;
 
 	void *user_buffer;

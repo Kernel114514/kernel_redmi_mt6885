@@ -238,9 +238,19 @@ static irqreturn_t mtk_wdma_irq_handler(int irq, void *dev_id)
 
 	if (val & (1 << 0)) {
 		struct mtk_drm_crtc *mtk_crtc = wdma->mtk_crtc;
+		struct mtk_cwb_info *cwb_info;
+		unsigned int buf_idx;
 
 		DDPIRQ("[IRQ] %s: frame complete!\n",
 			mtk_dump_comp_str(wdma));
+		cwb_info = mtk_crtc->cwb_info;
+		if (cwb_info && cwb_info->enable &&
+			cwb_info->comp->id == wdma->id) {
+			buf_idx = cwb_info->buf_idx;
+			cwb_info->buffer[buf_idx].timestamp = 100;
+			atomic_set(&mtk_crtc->cwb_task_active, 1);
+			wake_up_interruptible(&mtk_crtc->cwb_wq);
+		}
 		if (mtk_crtc->dc_main_path_commit_task) {
 			atomic_set(
 				&mtk_crtc->dc_main_path_commit_event, 1);
@@ -1212,6 +1222,42 @@ int MMPathTraceWDMA(struct mtk_ddp_comp *ddp_comp, char *str,
 	return n;
 }
 
+static int mtk_wdma_io_cmd(struct mtk_ddp_comp *comp, struct cmdq_pkt *handle,
+			  enum mtk_ddp_io_cmd cmd, void *params)
+{
+	struct mtk_disp_wdma *wdma = container_of(comp, struct mtk_disp_wdma,
+						  ddp_comp);
+
+	switch (cmd) {
+	case WDMA_WRITE_DST_ADDR0:
+	{
+		unsigned int addr = *(unsigned int *)params;
+
+		mtk_ddp_write(comp, addr & 0xFFFFFFFFU,
+			DISP_REG_WDMA_DST_ADDR0, handle);
+		wdma->cfg_info.addr = addr;
+	}
+		break;
+	case WDMA_READ_DST_SIZE:
+	{
+		unsigned int val, w, h;
+		struct mtk_cwb_info *cwb_info =
+			(struct mtk_cwb_info *)params;
+
+		val = readl(comp->regs + DISP_REG_WDMA_CLIP_SIZE);
+		w = val & 0x3fff;
+		h = (val >> 16) & 0x3fff;
+		cwb_info->copy_w = w;
+		cwb_info->copy_h = h;
+	}
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
 static const struct mtk_ddp_comp_funcs mtk_disp_wdma_funcs = {
 	.config = mtk_wdma_config,
 	.start = mtk_wdma_start,
@@ -1219,6 +1265,7 @@ static const struct mtk_ddp_comp_funcs mtk_disp_wdma_funcs = {
 	.prepare = mtk_wdma_prepare,
 	.unprepare = mtk_wdma_unprepare,
 	.is_busy = mtk_wdma_is_busy,
+	.io_cmd = mtk_wdma_io_cmd,
 };
 
 static int mtk_disp_wdma_bind(struct device *dev, struct device *master,

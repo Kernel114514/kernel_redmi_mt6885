@@ -1785,7 +1785,7 @@ static void mtk_crtc_free_lyeblob_ids(struct drm_crtc *crtc,
 	}
 }
 
-static unsigned int dual_pipe_comp_mapping(unsigned int comp_id)
+unsigned int dual_pipe_comp_mapping(unsigned int comp_id)
 {
 	unsigned int ret = 0;
 
@@ -6569,6 +6569,169 @@ static int mtk_drm_sf_pf_release_thread(void *data)
 	return 0;
 }
 
+static int mtk_drm_cwb_copy_buf(struct drm_crtc *crtc,
+			  struct mtk_cwb_info *cwb_info,
+			  void *buffer, unsigned int buf_idx)
+{
+	unsigned long addr_va = cwb_info->buffer[buf_idx].addr_va;
+	enum CWB_BUFFER_TYPE type = cwb_info->type;
+	int width, height, pitch, size;
+	unsigned long long time = sched_clock();
+
+	if (!cwb_info->funcs || !cwb_info->funcs->get_buffer) {
+		if (!cwb_info->user_buffer)
+			return -1;
+		buffer = cwb_info->user_buffer;
+		cwb_info->user_buffer = 0;
+	}
+
+	width = cwb_info->copy_w;
+	height = cwb_info->copy_h;
+	pitch = width * 3;
+	size = pitch * height;
+
+	if (type == IMAGE_ONLY) {
+		u8 *tmp = (u8 *)buffer;
+
+		memcpy(tmp, (void *)addr_va, size);
+	} else if (type == CARRY_METADATA) {
+		struct user_cwb_buffer *tmp = (struct user_cwb_buffer *)buffer;
+
+		tmp->data.width = width;
+		tmp->data.height = height;
+		tmp->meta.frameIndex = cwb_info->count;
+		tmp->meta.timestamp = cwb_info->buffer[buf_idx].timestamp;
+		memcpy(tmp->data.image, (void *)addr_va, size);
+	}
+	DDPMSG("[capture] copy buf from 0x%x, (w,h)=(%d,%d), ts:%llu done\n",
+			addr_va, width, height, time);
+
+	return 0;
+}
+
+static void mtk_drm_cwb_cb(struct cmdq_cb_data data)
+{
+	struct mtk_cmdq_cb_data *cb_data = data.data;
+
+	cmdq_pkt_destroy(cb_data->cmdq_handle);
+	kfree(cb_data);
+}
+
+static void mtk_drm_cwb_give_buf(struct drm_crtc *crtc)
+{
+	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
+	struct mtk_drm_private *priv = crtc->dev->dev_private;
+	struct mtk_cwb_info *cwb_info;
+	struct mtk_ddp_comp *comp;
+	unsigned int target_idx, next_idx, addr = 0;
+	void *user_buffer;
+	struct cmdq_pkt *handle;
+	struct cmdq_client *client = mtk_crtc->gce_obj.client[CLIENT_CFG];
+	struct mtk_cmdq_cb_data *cb_data;
+	const struct mtk_cwb_funcs *funcs;
+
+	DDP_MUTEX_LOCK(&mtk_crtc->lock, __func__, __LINE__);
+	if (!mtk_crtc->enabled) {
+		DDP_MUTEX_UNLOCK(&mtk_crtc->lock, __func__, __LINE__);
+		return;
+	}
+	cwb_info = mtk_crtc->cwb_info;
+	user_buffer = 0;
+	funcs = cwb_info->funcs;
+	if (funcs && funcs->get_buffer)
+		funcs->get_buffer(&user_buffer);
+	else
+		user_buffer = cwb_info->user_buffer;
+
+	if (!user_buffer) {
+		DDP_MUTEX_UNLOCK(&mtk_crtc->lock, __func__, __LINE__);
+		return;
+	}
+
+	target_idx = cwb_info->buf_idx;
+	next_idx = 1 - cwb_info->buf_idx;
+
+	addr = cwb_info->buffer[next_idx].addr_mva;
+	comp = cwb_info->comp;
+	cb_data = kmalloc(sizeof(*cb_data), GFP_KERNEL);
+	if (!cb_data) {
+		DDPPR_ERR("%s:%d, cb data creation failed\n",
+			__func__, __LINE__);
+		DDP_MUTEX_UNLOCK(&mtk_crtc->lock, __func__, __LINE__);
+		return;
+	}
+	mtk_crtc_pkt_create(&handle, crtc, client);
+	mtk_crtc_wait_frame_done(mtk_crtc, handle, DDP_FIRST_PATH, 0);
+	mtk_ddp_comp_io_cmd(comp, handle, WDMA_WRITE_DST_ADDR0, &addr);
+	if (mtk_crtc->is_dual_pipe) {
+		comp = priv->ddp_comp[dual_pipe_comp_mapping(comp->id)];
+		mtk_ddp_comp_io_cmd(comp, handle, WDMA_WRITE_DST_ADDR0, &addr);
+	}
+	cb_data->cmdq_handle = handle;
+	if (cmdq_pkt_flush_threaded(handle, mtk_drm_cwb_cb, cb_data) < 0)
+		DDPPR_ERR("failed to flush write_back\n");
+
+	cwb_info->buf_idx = next_idx;
+	DDP_MUTEX_UNLOCK(&mtk_crtc->lock, __func__, __LINE__);
+
+	DDP_MUTEX_LOCK(&mtk_crtc->cwb_lock, __func__, __LINE__);
+	mtk_drm_cwb_copy_buf(crtc, cwb_info, user_buffer, target_idx);
+	mtk_dprec_mmp_dump_cwb_buffer(crtc, user_buffer, target_idx);
+	DDP_MUTEX_UNLOCK(&mtk_crtc->cwb_lock, __func__, __LINE__);
+
+	if (funcs && funcs->copy_done)
+		funcs->copy_done(user_buffer, cwb_info->type);
+	else
+		DDPPR_ERR("User has no notify callback funciton/n");
+}
+
+static int mtk_drm_cwb_monitor_thread(void *data)
+{
+	int ret = 0;
+	struct drm_crtc *crtc = (struct drm_crtc *)data;
+	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
+	struct mtk_cwb_info *cwb_info;
+
+	msleep(16000);
+	do {
+		ret = wait_event_interruptible(
+			mtk_crtc->cwb_wq,
+			atomic_read(&mtk_crtc->cwb_task_active));
+		if (ret)
+			DDPMSG("%s wait_event_interruptible failed, ret = %d\n",
+			       __func__, ret);
+		atomic_set(&mtk_crtc->cwb_task_active, 0);
+
+		cwb_info = mtk_crtc->cwb_info;
+
+		if (!cwb_info || !cwb_info->enable)
+			continue;
+
+		mtk_drm_cwb_give_buf(crtc);
+
+	} while (!kthread_should_stop());
+
+	return 0;
+}
+
+static int mtk_drm_cwb_init(struct drm_crtc *crtc)
+{
+	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
+	const int len = 50;
+	char name[len];
+
+	if (snprintf(name, len, "mtk_drm_cwb")) {
+		mtk_crtc->cwb_task =
+			kthread_create(mtk_drm_cwb_monitor_thread, crtc, name);
+	}
+	init_waitqueue_head(&mtk_crtc->cwb_wq);
+	atomic_set(&mtk_crtc->cwb_task_active, 0);
+
+	wake_up_process(mtk_crtc->cwb_task);
+
+	return 0;
+}
+
 int mtk_drm_crtc_create(struct drm_device *drm_dev,
 			const struct mtk_crtc_path_data *path_data)
 {
@@ -6864,6 +7027,9 @@ int mtk_drm_crtc_create(struct drm_device *drm_dev,
 	mtk_crtc->sf_pf_release_thread =
 				kthread_run(mtk_drm_sf_pf_release_thread,
 					    mtk_crtc, "sf_pf_release_thread");
+
+	mutex_init(&mtk_crtc->cwb_lock);
+	mtk_drm_cwb_init(&mtk_crtc->base);
 
 	/* init wakelock resources */
 	{
